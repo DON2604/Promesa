@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.next-verify
+.data
+coverage
+package-lock.json
+backend/prisma/migrations
+docs/specs
+backend_readme.md
+frontend_README (2).md

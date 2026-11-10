@@ -1,0 +1,820 @@
+// Promesa — NeedMesh missions + PromiseTwin.
+// Money: BigInt minor units + CHAR(3) currency. Snapshots, evaluations, evidence and audit are append-only.
+// PayPal resource IDs are only ever written from verified PayPal API/webhook responses.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantKind {
+  ORG
+  BUSINESS
+  MERCHANT
+  PLATFORM
+}
+
+enum Role {
+  BUYER
+  SPONSOR
+  ORG_ADMIN
+  ORG_OPERATOR
+  MERCHANT_ADMIN
+  MERCHANT_OPERATOR
+  PLATFORM_SUPPORT
+  PLATFORM_ADMIN
+}
+
+enum MissionState {
+  DRAFT
+  INTENT_CONFIRMED
+  PLANNING
+  PLAN_READY
+  AWAITING_SPONSOR
+  PARTIALLY_FUNDED
+  FUNDED
+  FULFILLING
+  PARTIALLY_FULFILLED
+  COMPLETED
+  BLOCKED
+  CANCELLED
+  NEEDS_REPLAN
+  EXPIRED
+}
+
+enum PurchaseState {
+  PLANNED
+  QUOTE_CONFIRMED
+  ORDER_CREATED
+  AWAITING_BUYER_APPROVAL
+  APPROVED
+  CAPTURE_PENDING
+  CAPTURED
+  ORDER_EXPIRED
+  PAYMENT_FAILED
+  UNKNOWN_RECONCILING
+  CANCELLED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum TwinHealth {
+  UNDETERMINED
+  ON_TRACK
+  AT_RISK
+  BREACHED
+  UNDER_RECOVERY
+  FULFILLED
+  UNRESOLVED
+}
+
+enum RecoveryState {
+  PROPOSED
+  AWAITING_BUYER
+  AWAITING_MERCHANT
+  AUTHORIZED
+  EXECUTING
+  VERIFYING
+  SUCCEEDED
+  EXPIRED
+  REJECTED
+  FAILED
+  UNKNOWN_RECONCILING
+  CANCELLED
+  ESCALATED
+}
+
+enum ProvenanceSource {
+  PAYPAL_API
+  PAYPAL_WEBHOOK
+  MERCHANT
+  CARRIER
+  RECIPIENT
+  BUYER
+  AI_DERIVED
+  POLICY_DERIVED
+  SIMULATED
+}
+
+enum VerificationLevel {
+  VERIFIED
+  ATTESTED
+  UNVERIFIED
+  SIMULATED
+}
+
+enum EvidenceKind {
+  BUYER_CONFIRMED_INTENT
+  PAYPAL_API_VERIFIED
+  SELLER_ACCEPTED_TERMS
+  MERCHANT_ASSERTION
+  PAYPAL_TRACKING_METADATA
+  CARRIER_TRACKING
+  RECIPIENT_ATTESTED
+  PHOTO_OR_DOCUMENT
+  SIMULATED_DEMO
+}
+
+enum PayPalEnvironment {
+  sandbox
+  live
+}
+
+enum FinancialCommandType {
+  CREATE_ORDER
+  CAPTURE
+  REFUND
+  VOID
+  CREATE_INVOICE
+}
+
+enum FinancialCommandState {
+  PENDING
+  SENT
+  SUCCEEDED
+  FAILED
+  UNKNOWN_RECONCILING
+}
+
+// ---------------------------------------------------------------- identity
+
+model User {
+  id          String       @id @default(uuid()) @db.Uuid
+  authSubject String       @unique
+  email       String       @unique
+  displayName String
+  verifiedAt  DateTime?
+  disabledAt  DateTime?
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model Tenant {
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String
+  kind                TenantKind
+  status              String               @default("ACTIVE")
+  timezone            String
+  isDemo              Boolean              @default(false)
+  /// Organization verification (required before a mission can be published to the marketplace).
+  verifiedAt          DateTime?
+  verificationMethod  String?
+  verificationNote    String?
+  /// Public-safe profile shown in the marketplace (city, mission statement). Never addresses or beneficiaries.
+  publicProfileJson   Json?
+  /// Saved purchasing preferences (ORG) or funding interests (sponsor tenants).
+  preferencesJson     Json?
+  createdAt           DateTime             @default(now())
+  memberships         Membership[]
+  merchantConnections MerchantConnection[]
+  catalogProducts     CatalogProduct[]
+
+  @@map("tenants")
+}
+
+model Membership {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tenantId  String   @db.Uuid
+  role      Role
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@unique([userId, tenantId, role])
+  @@index([tenantId])
+  @@map("memberships")
+}
+
+/// A merchant's PayPal account context. Secrets are never stored here — only a secret-manager reference.
+model MerchantConnection {
+  id                 String            @id @default(uuid()) @db.Uuid
+  tenantId           String            @db.Uuid
+  paypalMerchantId   String?
+  environment        PayPalEnvironment
+  encryptedSecretRef String?
+  permissions        Json              @default("[]")
+  status             String            @default("NOT_CONNECTED")
+  lastVerifiedAt     DateTime?
+  createdAt          DateTime          @default(now())
+  tenant             Tenant            @relation(fields: [tenantId], references: [id])
+
+  @@unique([environment, paypalMerchantId])
+  @@index([tenantId])
+  @@map("merchant_connections")
+}
+
+// ---------------------------------------------------------------- intent, missions, commerce
+
+model Mission {
+  id          String         @id @default(uuid()) @db.Uuid
+  orgTenantId String         @db.Uuid
+  createdBy   String         @db.Uuid
+  title       String
+  type        String         @default("SUPPLY")
+  currency    String         @db.Char(3)
+  budgetMinor BigInt
+  state       MissionState   @default(DRAFT)
+  deadline    DateTime
+  timezone    String
+  isDemo      Boolean        @default(false)
+  scenarioKey String?        @unique
+  version     Int            @default(1)
+  /// Highest plan round produced by the agents (0 = no plan yet; 1 = original plan; 2+ = recovery re-plans).
+  planRound   Int            @default(0)
+  /// Latest plan read model (narrative, exclusions, unmet quantity). Facts live in `mission_orders`.
+  planJson    Json?
+  /// PRIVATE (organization only) or PUBLIC (listed in the reverse marketplace for sponsors and merchants).
+  visibility  String         @default("PRIVATE")
+  category    String         @default("supplies")
+  /// Public-safe summary. Delivery address and beneficiary identities are never stored here.
+  publicSummary String?
+  publishedAt DateTime?
+  repeatOfMissionId String?  @db.Uuid
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  intents     Intent[]
+  purchases   Purchase[]
+  orders      MissionOrder[]
+  events      MissionEvent[]
+  proposals   MerchantProposal[]
+
+  @@index([orgTenantId, createdAt])
+  @@index([visibility, publishedAt])
+  @@map("missions")
+}
+
+/// One PayPal order per merchant line of a NeedMesh mission plan. Money is BigInt minor units.
+/// PayPal IDs are written only from PayPal API responses (SANDBOX) or are `SIM-` prefixed (SIMULATED).
+model MissionOrder {
+  id                    String    @id @default(uuid()) @db.Uuid
+  missionId             String    @db.Uuid
+  planRound             Int
+  replacesOrderId       String?   @db.Uuid
+  merchantTenantId      String    @db.Uuid
+  catalogProductId      String    @db.Uuid
+  sku                   String
+  title                 String
+  quantity              Int
+  unitPriceMinor        BigInt
+  amountMinor           BigInt
+  currency              String    @db.Char(3)
+  estimatedDeliveryAt   DateTime?
+  /// SHA-256 over the immutable quote (product, qty, unit price, amount, round). Re-verified before every financial action.
+  quoteHash             String
+  state                 String    @default("AWAITING_APPROVAL")
+  version               Int       @default(1)
+  railMode              String    @default("SIMULATED")
+  stockConfirmedAt      DateTime?
+  stockoutAt            DateTime?
+  paypalOrderId         String?   @unique
+  paypalAuthorizationId String?   @unique
+  paypalCaptureId       String?   @unique
+  paypalRefundId        String?   @unique
+  approveUrl            String?
+  paypalLastVerifiedAt  DateTime?
+  approvedBy            String?   @db.Uuid
+  approvedAt            DateTime?
+  /// Tenant of the sponsor who funded this specific order (multiple sponsors fund different orders).
+  sponsorTenantId       String?   @db.Uuid
+  /// Accepted merchant proposal whose negotiated terms priced this order, if any.
+  proposalId            String?   @db.Uuid
+  refundApprovedAt      DateTime?
+  carrier               String?
+  trackingNumber        String?
+  shippedAt             DateTime?
+  quantityReceived      Int?
+  receiptNote           String?
+  acknowledgedBy        String?   @db.Uuid
+  acknowledgedAt        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  mission               Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, planRound])
+  @@map("mission_orders")
+}
+
+/// A participating merchant's offer against a published mission, and the negotiation around it.
+/// Terms only bind once the merchant has explicitly accepted them (state ACCEPTED, merchantAcceptedAt set).
+model MerchantProposal {
+  id                     String    @id @default(uuid()) @db.Uuid
+  missionId              String    @db.Uuid
+  merchantTenantId       String    @db.Uuid
+  catalogProductId       String    @db.Uuid
+  submittedBy            String    @db.Uuid
+  quantity               Int
+  unitPriceMinor         BigInt
+  leadTimeHours          Int
+  deliveryTerms          String
+  note                   String?
+  /// SUBMITTED → COUNTERED → ACCEPTED | DECLINED | WITHDRAWN (or SUBMITTED → ACCEPTED directly).
+  state                  String    @default("SUBMITTED")
+  counterUnitPriceMinor  BigInt?
+  counterRationale       String?
+  counteredBy            String?   @db.Uuid
+  counteredAt            DateTime?
+  agreedUnitPriceMinor   BigInt?
+  merchantAcceptedAt     DateTime?
+  orgAcceptedBy          String?   @db.Uuid
+  orgAcceptedAt          DateTime?
+  evaluationJson         Json      @default("{}")
+  version                Int       @default(1)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  mission                Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, state])
+  @@index([merchantTenantId, createdAt])
+  @@map("merchant_proposals")
+}
+
+/// Append-only agent / human / PayPal timeline for a mission. `source` is the provenance of the fact.
+model MissionEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  seq         Int      @unique @default(autoincrement())
+  missionId   String   @db.Uuid
+  orderId     String?  @db.Uuid
+  agent       String
+  kind        String
+  title       String
+  detail      String
+  source      String
+  engine      String   @default("deterministic")
+  payloadJson Json     @default("{}")
+  createdAt   DateTime @default(now())
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  @@index([missionId, seq])
+  @@map("mission_events")
+}
+
+model Intent {
+  id                    String     @id @default(uuid()) @db.Uuid
+  missionId             String?    @db.Uuid
+  buyerTenantId         String     @db.Uuid
+  createdBy             String     @db.Uuid
+  rawText               String
+  compiledJson          Json
+  compiledSchemaVersion Int        @default(1)
+  confirmedSnapshotJson Json
+  snapshotHash          String
+  confirmedAt           DateTime
+  compilerVersion       String
+  createdAt             DateTime   @default(now())
+  mission               Mission?   @relation(fields: [missionId], references: [id])
+  offers                Offer[]
+  purchases             Purchase[]
+
+  @@index([buyerTenantId, createdAt])
+  @@map("intents")
+}
+
+model CatalogProduct {
+  id               String   @id @default(uuid()) @db.Uuid
+  sellerTenantId   String?  @db.Uuid
+  source           String
+  sourceExternalId String
+  sku              String
+  title            String
+  productKind      String
+  attributes       Json
+  unitPriceMinor   BigInt
+  currency         String   @db.Char(3)
+  packSize         Int      @default(1)
+  inventoryQty     Int
+  leadTimeHours    Int
+  deliveryTerms    String
+  lastVerifiedAt   DateTime
+  isDemo           Boolean  @default(true)
+  seller           Tenant?  @relation(fields: [sellerTenantId], references: [id])
+
+  @@unique([source, sourceExternalId])
+  @@index([productKind])
+  @@map("catalog_products")
+}
+
+model Offer {
+  id                 String             @id @default(uuid()) @db.Uuid
+  sellerTenantId     String             @db.Uuid
+  intentId           String             @db.Uuid
+  catalogProductId   String?            @db.Uuid
+  sku                String
+  qty                Int
+  totalMinor         BigInt
+  currency           String             @db.Char(3)
+  deliveryEstimateAt DateTime
+  source             String
+  termsJson          Json
+  expiresAt          DateTime
+  version            Int                @default(1)
+  createdAt          DateTime           @default(now())
+  intent             Intent             @relation(fields: [intentId], references: [id])
+  commitments        SellerCommitment[]
+
+  @@index([intentId])
+  @@map("offers")
+}
+
+/// Explicit, versioned seller acceptance. Immutable after insert; revocation sets revokedAt only.
+model SellerCommitment {
+  id                String     @id @default(uuid()) @db.Uuid
+  offerId           String     @db.Uuid
+  sellerTenantId    String     @db.Uuid
+  acceptedBy        String     @db.Uuid
+  acceptedAt        DateTime
+  acceptedTermsJson Json
+  termsHash         String
+  version           Int
+  isSimulated       Boolean    @default(false)
+  revokedAt         DateTime?
+  createdAt         DateTime   @default(now())
+  offer             Offer      @relation(fields: [offerId], references: [id])
+  purchases         Purchase[]
+
+  @@unique([offerId, version])
+  @@map("seller_commitments")
+}
+
+model Purchase {
+  id                String             @id @default(uuid()) @db.Uuid
+  buyerTenantId     String             @db.Uuid
+  intentId          String             @db.Uuid
+  missionId         String?            @db.Uuid
+  payerUserId       String             @db.Uuid
+  sellerTenantId    String?            @db.Uuid
+  commitmentId      String?            @db.Uuid
+  title             String
+  amountMinor       BigInt?
+  currency          String             @db.Char(3)
+  state             PurchaseState      @default(PLANNED)
+  isDemo            Boolean            @default(false)
+  scenarioKey       String?            @unique
+  version           Int                @default(1)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  intent            Intent             @relation(fields: [intentId], references: [id])
+  mission           Mission?           @relation(fields: [missionId], references: [id])
+  commitment        SellerCommitment?  @relation(fields: [commitmentId], references: [id])
+  twin              PromiseTwin?
+  checkoutAttempts  CheckoutAttempt[]
+  captures          PayPalCapture[]
+  fulfillment       Fulfillment?
+  financialCommands FinancialCommand[]
+
+  @@index([buyerTenantId, createdAt])
+  @@index([sellerTenantId])
+  @@map("purchases")
+}
+
+// ---------------------------------------------------------------- PayPal (verified records only)
+
+model CheckoutAttempt {
+  id                   String   @id @default(uuid()) @db.Uuid
+  purchaseId           String   @db.Uuid
+  merchantConnectionId String   @db.Uuid
+  requestId            String   @unique
+  paypalOrderId        String?  @unique
+  paypalOrderStatus    String?
+  approvalStatus       String   @default("PENDING")
+  captureStatus        String   @default("NOT_CAPTURED")
+  immutableQuoteHash   String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  purchase             Purchase @relation(fields: [purchaseId], references: [id])
+
+  @@index([purchaseId])
+  @@map("checkout_attempts")
+}
+
+model PayPalCapture {
+  id                   String            @id @default(uuid()) @db.Uuid
+  purchaseId           String            @db.Uuid
+  environment          PayPalEnvironment
+  merchantConnectionId String            @db.Uuid
+  paypalOrderId        String
+  paypalCaptureId      String            @unique
+  amountMinor          BigInt
+  currency             String            @db.Char(3)
+  paypalStatus         String
+  lastVerifiedAt       DateTime
+  createdAt            DateTime          @default(now())
+  purchase             Purchase          @relation(fields: [purchaseId], references: [id])
+  refunds              PayPalRefund[]
+
+  @@index([purchaseId])
+  @@map("paypal_captures")
+}
+
+model PayPalRefund {
+  id             String        @id @default(uuid()) @db.Uuid
+  captureId      String        @db.Uuid
+  recoveryId     String?       @db.Uuid
+  requestId      String        @unique
+  paypalRefundId String?       @unique
+  amountMinor    BigInt
+  currency       String        @db.Char(3)
+  status         String
+  lastVerifiedAt DateTime?
+  createdAt      DateTime      @default(now())
+  capture        PayPalCapture @relation(fields: [captureId], references: [id])
+
+  @@map("paypal_refunds")
+}
+
+model FinancialCommand {
+  id                   String                @id @default(uuid()) @db.Uuid
+  purchaseId           String                @db.Uuid
+  merchantConnectionId String?               @db.Uuid
+  type                 FinancialCommandType
+  requestId            String                @unique
+  payloadHash          String
+  state                FinancialCommandState @default(PENDING)
+  paypalResourceId     String?
+  attempts             Int                   @default(0)
+  lastErrorCode        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  purchase             Purchase              @relation(fields: [purchaseId], references: [id])
+
+  @@index([purchaseId])
+  @@map("financial_commands")
+}
+
+model PayPalWebhookInbox {
+  id            String            @id @default(uuid()) @db.Uuid
+  paypalEventId String            @unique
+  eventType     String
+  rawChecksum   String
+  environment   PayPalEnvironment
+  verifiedAt    DateTime?
+  processedAt   DateTime?
+  status        String
+  receivedAt    DateTime          @default(now())
+
+  @@map("paypal_webhook_inbox")
+}
+
+// ---------------------------------------------------------------- PromiseTwin
+
+model PromiseTwin {
+  id                     String           @id @default(uuid()) @db.Uuid
+  tenantId               String           @db.Uuid
+  purchaseId             String           @unique @db.Uuid
+  intentSnapshotJson     Json
+  commitmentSnapshotJson Json?
+  health                 TwinHealth       @default(UNDETERMINED)
+  evaluationVersion      Int              @default(0)
+  aggregateVersion       Int              @default(1)
+  lastEvaluatedAt        DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  purchase               Purchase         @relation(fields: [purchaseId], references: [id])
+  evaluations            TwinEvaluation[]
+  evidence               Evidence[]
+  snapshots              TwinSnapshot[]
+  incidents              Incident[]
+
+  @@index([tenantId, updatedAt])
+  @@map("promise_twins")
+}
+
+model TwinEvaluation {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  twinId                String                 @db.Uuid
+  version               Int
+  model                 String
+  modelVersion          String
+  promptVersion         String
+  policyVersion         String
+  evidenceIdsJson       Json
+  constraintResultsJson Json
+  causeHypothesesJson   Json
+  resultJson            Json
+  health                TwinHealth
+  rationale             String
+  clockNow              DateTime
+  clockSimulated        Boolean
+  createdAt             DateTime               @default(now())
+  twin                  PromiseTwin            @relation(fields: [twinId], references: [id])
+  constraintEvaluations ConstraintEvaluation[]
+
+  @@unique([twinId, version])
+  @@map("twin_evaluations")
+}
+
+model ConstraintEvaluation {
+  id                 String         @id @default(uuid()) @db.Uuid
+  twinEvaluationId   String         @db.Uuid
+  constraintId       String
+  status             String
+  evidenceIds        Json
+  sellerCommitmentId String?        @db.Uuid
+  policyRuleId       String
+  explanation        String
+  evaluation         TwinEvaluation @relation(fields: [twinEvaluationId], references: [id])
+
+  @@index([twinEvaluationId])
+  @@map("constraint_evaluations")
+}
+
+/// Timefold: immutable state after meaningful transitions. knownAt = when the platform learned it.
+model TwinSnapshot {
+  id               String      @id @default(uuid()) @db.Uuid
+  twinId           String      @db.Uuid
+  aggregateVersion Int
+  eventSeq         Int
+  label            String
+  stateJson        Json
+  knownAt          DateTime
+  recordedAt       DateTime    @default(now())
+  snapshotHash     String
+  isSimulated      Boolean
+  twin             PromiseTwin @relation(fields: [twinId], references: [id])
+
+  @@unique([twinId, eventSeq])
+  @@index([twinId, eventSeq(sort: Desc)])
+  @@map("twin_snapshots")
+}
+
+model Evidence {
+  id                String            @id @default(uuid()) @db.Uuid
+  tenantId          String            @db.Uuid
+  twinId            String            @db.Uuid
+  kind              EvidenceKind
+  assertionType     String
+  source            ProvenanceSource
+  sourceEventId     String
+  summary           String
+  occurredAt        DateTime
+  observedAt        DateTime
+  ingestedAt        DateTime          @default(now())
+  payloadJson       Json
+  storageObjectKey  String?
+  attestedBy        String?           @db.Uuid
+  verificationLevel VerificationLevel
+  isSimulated       Boolean
+  checksum          String
+  twin              PromiseTwin       @relation(fields: [twinId], references: [id])
+
+  @@unique([twinId, source, sourceEventId])
+  @@index([twinId, ingestedAt])
+  @@map("evidence")
+}
+
+model Fulfillment {
+  id              String    @id @default(uuid()) @db.Uuid
+  purchaseId      String    @unique @db.Uuid
+  merchantStatus  String    @default("NOT_STARTED")
+  carrierStatus   String?
+  recipientStatus String    @default("NOT_RECEIVED")
+  deliveryEventAt DateTime?
+  lastUpdatedAt   DateTime  @default(now())
+  purchase        Purchase  @relation(fields: [purchaseId], references: [id])
+
+  @@map("fulfillments")
+}
+
+model Incident {
+  id                  String             @id @default(uuid()) @db.Uuid
+  twinId              String             @db.Uuid
+  type                String
+  severity            String
+  state               String
+  breachConstraintIds Json
+  evidenceIdsJson     Json
+  detectedAt          DateTime
+  confirmedAt         DateTime?
+  twin                PromiseTwin        @relation(fields: [twinId], references: [id])
+  recoveryProposals   RecoveryProposal[]
+
+  @@index([twinId])
+  @@map("incidents")
+}
+
+model RecoveryProposal {
+  id               String             @id @default(uuid()) @db.Uuid
+  incidentId       String             @db.Uuid
+  type             String
+  sellerTenantId   String?            @db.Uuid
+  amountMinor      BigInt?
+  currency         String             @db.Char(3)
+  proposedPlanJson Json
+  snapshotHash     String
+  state            RecoveryState      @default(PROPOSED)
+  expiresAt        DateTime
+  policyVersion    String
+  idempotencyKey   String             @unique
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now())
+  incident         Incident           @relation(fields: [incidentId], references: [id])
+  approvals        RecoveryApproval[]
+
+  @@map("recovery_proposals")
+}
+
+model RecoveryApproval {
+  id                 String           @id @default(uuid()) @db.Uuid
+  proposalId         String           @db.Uuid
+  proposalVersion    Int
+  actorUserId        String           @db.Uuid
+  actorTenantId      String           @db.Uuid
+  permission         String
+  decision           String
+  signedSnapshotHash String
+  decidedAt          DateTime         @default(now())
+  proposal           RecoveryProposal @relation(fields: [proposalId], references: [id])
+
+  @@unique([proposalId, proposalVersion, permission])
+  @@map("recovery_approvals")
+}
+
+// ---------------------------------------------------------------- events, audit, agents, receipts, demo
+
+/// Transactional outbox. `seq` is the monotonic SSE event id used for replay.
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  seq           Int       @unique @default(autoincrement())
+  tenantId      String    @db.Uuid
+  aggregateType String
+  aggregateId   String    @db.Uuid
+  version       Int
+  eventType     String
+  payloadJson   Json
+  isSimulated   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  publishedAt   DateTime?
+
+  @@index([tenantId, seq])
+  @@index([tenantId, aggregateId, version])
+  @@map("outbox_events")
+}
+
+/// Append-only. `entryHash` chains to the previous entry as a tamper-evidence signal (not a blockchain).
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  seq            Int      @unique @default(autoincrement())
+  tenantId       String?  @db.Uuid
+  actorType      String
+  actorId        String
+  action         String
+  resourceType   String
+  resourceId     String
+  policyDecision String?
+  beforeHash     String?
+  afterHash      String?
+  correlationId  String
+  prevHash       String
+  entryHash      String
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("audit_log")
+}
+
+model AgentRun {
+  id                      String    @id @default(uuid()) @db.Uuid
+  tenantId                String    @db.Uuid
+  workflow                String
+  entityId                String    @db.Uuid
+  llmProvider             String
+  model                   String
+  promptVersion           String
+  state                   String
+  startedAt               DateTime  @default(now())
+  endedAt                 DateTime?
+  summarizedToolTraceJson Json      @default("[]")
+
+  @@index([tenantId, entityId])
+  @@map("agent_runs")
+}
+
+model MissionReceipt {
+  id              String    @id @default(uuid()) @db.Uuid
+  missionId       String    @db.Uuid
+  revision        Int
+  artifactHash    String
+  summaryJson     Json
+  publicTokenHash String?
+  revokedAt       DateTime?
+  generatedAt     DateTime  @default(now())
+
+  @@unique([missionId, revision])
+  @@map("mission_receipts")
+}
+
+/// Scenario-scoped simulated clock. Never alters the real wall clock or PayPal timestamps.
+model DemoClock {
+  scenarioKey  String   @id
+  tenantId     String   @db.Uuid
+  simulatedNow DateTime
+  updatedAt    DateTime @updatedAt
+
+  @@map("demo_clocks")
+}

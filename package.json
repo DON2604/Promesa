@@ -1,0 +1,54 @@
+{
+  "name": "promesa",
+  "private": true,
+  "version": "0.1.0",
+  "description": "NeedMesh — PayPal-powered agentic commerce missions, with PromiseTwin AI as the protective fallback (independent hackathon prototype).",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/contracts",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "db:start": "node scripts/dev-db.mjs",
+    "build:contracts": "npm run build -w @promesa/contracts",
+    "build": "npm run build:contracts && npm run build -w @promesa/backend && npm run build -w @promesa/frontend",
+    "dev:backend": "npm run dev -w @promesa/backend",
+    "dev:frontend": "npm run dev -w @promesa/frontend",
+    "dev": "npm run build:contracts && concurrently -n api,web -c blue,magenta \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "npm run build:contracts && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:contracts && npm run test --workspaces --if-present",
+    "db:migrate": "npm run db:migrate -w @promesa/backend",
+    "db:deploy": "npm run db:deploy -w @promesa/backend",
+    "demo:seed": "npm run db:seed -w @promesa/backend",
+    "smoke": "node scripts/smoke.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "smoke:needmesh": "node scripts/smoke-needmesh.mjs",
+    "smoke:marketplace": "node scripts/smoke-marketplace.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@next/eslint-plugin-next": "15.5.29",
+    "concurrently": "^9.2.1",
+    "embedded-postgres": "17.11.0-beta.19",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.4.0",
+    "prettier": "^3.6.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.72.1"
+  },
+  "allowScripts": {
+    "@embedded-postgres/windows-x64@17.11.0-beta.19": true,
+    "@prisma/client@6.19.3": true,
+    "prisma@6.19.3": true,
+    "@prisma/engines@6.19.3": true,
+    "esbuild@0.28.2": true
+  }
+}

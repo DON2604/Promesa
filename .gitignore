@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+.next-verify/
+out/
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
+.data/
+*.log
+.DS_Store
+next-env.d.ts
+test-results/
+playwright-report/
+docs/screenshots/**/fail-*.png

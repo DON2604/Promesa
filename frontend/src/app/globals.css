@@ -1,0 +1,236 @@
+@import 'tailwindcss';
+
+/* ---------- NeedMesh light fintech tokens (light only) ----------
+   Cool neutral canvas, white cards, navy ink, PayPal-blue signal. The editorial serif, folded
+   sheets and perforated receipts stay as the product's signature. */
+:root {
+  --canvas: #f4f6fa;
+  --paper: #ffffff;
+  --paper-2: #f8fafc;
+  --ink: #0b1f3a;
+  --muted-ink: #5a6b85;
+  --hairline: #e2e8f0;
+  --hairline-strong: #cbd5e1;
+  --signal: #0062d6;
+  --signal-strong: #003087;
+  --signal-soft: #e8f1fd;
+  --good: #0d7f5a;
+  --good-soft: #e5f5ee;
+  --caution: #a8620e;
+  --caution-soft: #fdf3e3;
+  --breach: #c03a32;
+  --breach-soft: #fdecea;
+  --cutout: #eaeef4;
+  --shadow-ink: 15 30 60;
+
+  --radius-sheet: 12px;
+  --radius-control: 8px;
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 520ms;
+  --ease-paper: cubic-bezier(0.22, 0.7, 0.18, 1);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted-ink);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-signal: var(--signal);
+  --color-signal-strong: var(--signal-strong);
+  --color-signal-soft: var(--signal-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
+  --color-breach: var(--breach);
+  --color-breach-soft: var(--breach-soft);
+  --color-cutout: var(--cutout);
+  --font-display: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  --font-sans: var(--font-instrument), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --radius-sheet: var(--radius-sheet);
+  --radius-control: var(--radius-control);
+}
+
+/* ---------- base ---------- */
+html {
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01', 'cv11';
+  min-height: 100dvh;
+  background-color: var(--canvas);
+}
+
+/* Faint ledger grid, used only behind hero / blueprint areas. */
+.ledger-grid {
+  background-image:
+    linear-gradient(to right, rgb(var(--shadow-ink) / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(var(--shadow-ink) / 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+::selection {
+  background: var(--signal);
+  color: var(--paper);
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- paper surfaces ---------- */
+.sheet {
+  position: relative;
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sheet);
+  box-shadow:
+    0 1px 2px rgb(var(--shadow-ink) / 0.05),
+    0 12px 32px -24px rgb(var(--shadow-ink) / 0.28);
+}
+
+/* Compact metric tile used across dashboards. */
+.metric {
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sheet);
+  padding: 14px 16px;
+}
+
+/* A second sheet peeking out underneath: the "stack of documents" cue. */
+.sheet-stacked::before {
+  content: '';
+  position: absolute;
+  inset: 6px -6px -6px 6px;
+  z-index: -1;
+  border-radius: var(--radius-sheet);
+  border: 1px solid var(--hairline);
+  background: var(--paper-2);
+}
+
+/* Folded top-right corner. */
+.sheet-folded {
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+}
+.sheet-folded::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 22px;
+  height: 22px;
+  background: linear-gradient(225deg, transparent 50%, var(--cutout) 50%);
+  border-bottom-left-radius: 4px;
+  box-shadow: -1px 1px 0 var(--hairline);
+}
+
+.cutout {
+  background: var(--cutout);
+  border-radius: var(--radius-sheet);
+}
+
+/* Dual-ruled seam: promise vs. reality. */
+.seam {
+  height: 5px;
+  border-top: 1px solid var(--hairline-strong);
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.rule-dotted {
+  background-image: linear-gradient(to right, var(--hairline-strong) 1px, transparent 1px);
+  background-size: 5px 1px;
+  background-repeat: repeat-x;
+  background-position: bottom;
+  height: 1px;
+}
+
+/* Perforated receipt edge. */
+.perforated {
+  --hole: 5px;
+  -webkit-mask: radial-gradient(circle var(--hole) at 50% 0, transparent 98%, #000) 0 0 / 18px 100%;
+  mask: radial-gradient(circle var(--hole) at 50% 0, transparent 98%, #000) 0 0 / 18px 100%;
+}
+
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-ink);
+}
+
+/* Highlight marks for source spans in the intent composer. */
+mark.span-mark {
+  background: var(--signal-soft);
+  color: inherit;
+  border-bottom: 1.5px solid var(--signal);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+mark.span-mark[data-field='prohibitedAttributes'] {
+  background: var(--breach-soft);
+  border-bottom-color: var(--breach);
+}
+mark.span-mark[data-field='deadlineISO'] {
+  background: var(--caution-soft);
+  border-bottom-color: var(--caution);
+}
+mark.span-mark[data-field='budgetMinor'] {
+  background: var(--good-soft);
+  border-bottom-color: var(--good);
+}
+
+/* Promise Fold 3D context; motion only animates transform/opacity. */
+.fold-stage {
+  perspective: 1400px;
+}
+.fold-flap {
+  transform-origin: top center;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .sheet,
+  .seam {
+    border-color: CanvasText;
+  }
+  mark.span-mark {
+    forced-color-adjust: none;
+    outline: 1px solid Highlight;
+  }
+}
