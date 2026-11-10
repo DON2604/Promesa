@@ -77,6 +77,13 @@ labelled simulations.
 | `CHANNEL3_API_KEY`                                                         | Reported only. The Channel3 adapter is **not integrated**        |
 | `DEMO_MODE`, `DEMO_AUTH_ENABLED`                                           | Demo merchant console, demo verification and persona sign-in off |
 
+Gemini, when configured, defaults to `gemini-2.5-flash-lite` and a local free-tier budget of
+4 requests per minute and 15 per day (under the tightest published free-tier figures). Past that
+budget, or if Gemini answers 429, narration uses the deterministic text and the mission request
+still succeeds. There are no retries. Set `GEMINI_RPM`, `GEMINI_RPD` and `GEMINI_TPM` to the
+numbers in AI Studio if your project shows a higher quota. `gemini-2.0-flash` is not called unless
+you set those, because its free quota is reported as zero.
+
 ## Scripts
 
 ```powershell

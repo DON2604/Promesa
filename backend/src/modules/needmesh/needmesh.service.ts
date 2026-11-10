@@ -1625,6 +1625,7 @@ export class NeedMeshService {
         throw new Error('narration introduced an ungrounded figure');
       return { value: out, engine: `llm:${this.llm.name}/${this.llm.model}` };
     } catch (error) {
+      // A Gemini rate limit, a skipped call, or a bad model response never fails the mission.
       this.logger.warn(
         `LLM narration fell back to deterministic text: ${error instanceof Error ? error.message : error}`,
       );

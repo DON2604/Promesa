@@ -22,6 +22,14 @@ export interface LLMProvider {
   generateStructured<T>(request: StructuredRequest<T>): Promise<T>;
 }
 
+/** The model was not called, or it failed. Callers must use their deterministic result. */
+export class LlmDeclined extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LlmDeclined';
+  }
+}
+
 export const LLM_PROVIDER = Symbol('LLM_PROVIDER');
 
 export const INTENT_PROMPT_VERSION = 'intent.compile/v1';

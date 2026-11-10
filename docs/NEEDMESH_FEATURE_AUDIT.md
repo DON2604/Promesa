@@ -110,7 +110,8 @@ Paths are relative to the repository root. `nm/` = `backend/src/modules/needmesh
 - `PAYPAL_WEBHOOK_ID` and a publicly reachable URL for webhooks.
 - PayPal MCP (`PAYPAL_MCP_ENABLED`) depends on the Sandbox credentials above.
 - LLM keys (`OPENAI_API_KEY` / `GEMINI_API_KEY`): narration and parsing use the deterministic
-  fixture provider.
+  fixture provider. With Gemini configured, a local budget stays under the free-tier cap and a
+  rate-limit response falls back to deterministic narration. The mission request does not fail.
 - `CHANNEL3_API_KEY` and the Channel3 adapter itself.
 - Real merchant onboarding or PayPal partner permissions: all merchants are fictional.
 

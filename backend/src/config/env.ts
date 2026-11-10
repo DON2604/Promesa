@@ -13,6 +13,13 @@ const optionalSecret = z
   .optional()
   .transform((v) => (!v || v.startsWith('YOUR_') || v.startsWith('replace-') ? undefined : v));
 
+/** Blank stays unset. A non-integer fails startup instead of silently becoming zero. */
+const optionalCount = (max: number) =>
+  z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    z.coerce.number().int().min(0).max(max).optional(),
+  );
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -56,6 +63,14 @@ const EnvSchema = z.object({
     .transform((v) => v || undefined),
   OPENAI_API_KEY: optionalSecret,
   GEMINI_API_KEY: optionalSecret,
+  /**
+   * Hard caps for Gemini. Unset means the conservative free-tier budget (under the tightest
+   * published free limits). A blank value is unset. Calls stop before these caps and narration
+   * falls back; the mission request does not fail.
+   */
+  GEMINI_RPM: optionalCount(60),
+  GEMINI_RPD: optionalCount(100_000),
+  GEMINI_TPM: optionalCount(10_000_000),
   ANTHROPIC_API_KEY: optionalSecret,
   /** Presence is reported only; the Channel3 discovery adapter is not integrated yet. */
   CHANNEL3_API_KEY: optionalSecret,

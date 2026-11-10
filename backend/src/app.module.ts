@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { Global, Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ProblemFilter } from './common/errors';
@@ -5,6 +6,7 @@ import { ENV, type Env, loadEnv } from './config/env';
 import { PrismaService } from './infra/prisma.service';
 import { CompositeLLMProvider } from './modules/agents/composite-provider';
 import { FixtureLLMProvider } from './modules/agents/fixture-provider';
+import { GeminiBudget, freeTierBudget } from './modules/agents/gemini-budget';
 import { LLM_PROVIDER } from './modules/agents/llm-provider';
 import { OpenAICompatibleProvider } from './modules/agents/openai-compatible-provider';
 import {
@@ -94,12 +96,24 @@ class CoreModule {}
         }
         if (env.LLM_PROVIDER === 'gemini') {
           if (!env.GEMINI_API_KEY) throw new Error('LLM_PROVIDER=gemini requires GEMINI_API_KEY.');
+          // 2.0-flash's free quota is reported as zero, so the default is a model that still has one.
+          const model = env.LLM_MODEL ?? 'gemini-2.5-flash-lite';
+          const base = freeTierBudget(model);
+          const budget = new GeminiBudget(
+            {
+              requestsPerMinute: env.GEMINI_RPM ?? base.requestsPerMinute,
+              requestsPerDay: env.GEMINI_RPD ?? base.requestsPerDay,
+              tokensPerMinute: env.GEMINI_TPM ?? base.tokensPerMinute,
+            },
+            { file: join(process.cwd(), '.data', 'gemini-budget.json') },
+          );
           return new CompositeLLMProvider(
             new OpenAICompatibleProvider({
               name: 'gemini',
               baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
               apiKey: env.GEMINI_API_KEY,
-              model: env.LLM_MODEL ?? 'gemini-2.0-flash',
+              model,
+              budget,
             }),
             fixture,
           );
