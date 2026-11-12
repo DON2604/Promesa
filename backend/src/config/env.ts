@@ -105,7 +105,8 @@ export function assertProductionSafety(env: Env): void {
   const problems: string[] = [];
   if (env.DEMO_MODE) problems.push('DEMO_MODE must be false in production');
   if (env.DEMO_AUTH_ENABLED) problems.push('DEMO_AUTH_ENABLED must be false in production');
-  if (env.AUTH_SESSION_SECRET.length < 48) problems.push('AUTH_SESSION_SECRET is too short');
+  // 32 matches the schema. Render's generated 256-bit secret is 43–44 characters, under the old 48 floor.
+  if (env.AUTH_SESSION_SECRET.length < 32) problems.push('AUTH_SESSION_SECRET is too short');
   if (env.ALLOWED_ORIGINS.some((o) => o === '*' || !o.startsWith('https://'))) {
     problems.push('ALLOWED_ORIGINS must be explicit https origins');
   }
