@@ -29,6 +29,7 @@ import {
 } from '../agents/llm-provider';
 import { AuditService } from '../audit/audit.service';
 import { CatalogService } from '../commerce/catalog.service';
+import { Channel3Service } from '../commerce/channel3.service';
 import { type CatalogItem, solveOffers } from '../commerce/offer-solver';
 import { resolveClock } from '../demo/clock';
 import { OutboxService } from '../events/outbox.service';
@@ -118,6 +119,7 @@ export class NeedMeshService {
     @Inject(PAYPAL_RAIL) private readonly rail: PayPalRail,
     @Inject(PAYPAL_MCP) private readonly mcp: PayPalMcpAdapter,
     @Inject(LLM_PROVIDER) private readonly llm: LLMProvider,
+    private readonly channel3: Channel3Service,
   ) {}
 
   private get railSource(): MissionEventSource {
@@ -132,33 +134,35 @@ export class NeedMeshService {
 
   async lifecycle(principal: Principal, missionId: string): Promise<MissionLifecycleView> {
     const { mission, spec } = await this.load(principal, missionId, 'read');
-    const [events, receipt, proposals, runs, org, approvers, supplyCatalog] = await Promise.all([
-      this.prisma.missionEvent.findMany({
-        where: { missionId },
-        orderBy: { seq: 'asc' },
-        take: 300,
-      }),
-      this.prisma.missionReceipt.findFirst({
-        where: { missionId, revokedAt: null },
-        orderBy: { revision: 'desc' },
-      }),
-      this.prisma.merchantProposal.findMany({
-        where: { missionId },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.prisma.agentRun.findMany({
-        where: { entityId: missionId, workflow: { startsWith: 'needmesh.' } },
-        orderBy: { startedAt: 'desc' },
-        take: 6,
-      }),
-      this.prisma.tenant.findUniqueOrThrow({ where: { id: mission.orgTenantId } }),
-      this.prisma.user.findMany({
-        where: {
-          id: { in: mission.orders.map((o) => o.approvedBy).filter((x): x is string => !!x) },
-        },
-      }),
-      this.catalogFor(missionId, spec.productKind),
-    ]);
+    const [events, receipt, proposals, runs, org, approvers, supplyCatalog, channel3Discovery] =
+      await Promise.all([
+        this.prisma.missionEvent.findMany({
+          where: { missionId },
+          orderBy: { seq: 'asc' },
+          take: 300,
+        }),
+        this.prisma.missionReceipt.findFirst({
+          where: { missionId, revokedAt: null },
+          orderBy: { revision: 'desc' },
+        }),
+        this.prisma.merchantProposal.findMany({
+          where: { missionId },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.prisma.agentRun.findMany({
+          where: { entityId: missionId, workflow: { startsWith: 'needmesh.' } },
+          orderBy: { startedAt: 'desc' },
+          take: 6,
+        }),
+        this.prisma.tenant.findUniqueOrThrow({ where: { id: mission.orgTenantId } }),
+        this.prisma.user.findMany({
+          where: {
+            id: { in: mission.orders.map((o) => o.approvedBy).filter((x): x is string => !!x) },
+          },
+        }),
+        this.catalogFor(missionId, spec.productKind),
+        this.channel3.discover(spec, principal.userId),
+      ]);
     const listed = new Set(supplyCatalog.catalog.map((c) => c.merchant.tenantId));
     const names = await this.tenantNames([
       ...mission.orders.map((o) => o.merchantTenantId),
@@ -259,12 +263,11 @@ export class NeedMeshService {
         },
         {
           name: 'Channel3 product discovery',
-          status: 'NOT_CONFIGURED',
-          detail: this.env.CHANNEL3_API_KEY
-            ? 'A CHANNEL3_API_KEY is present, but the Channel3 adapter is not integrated yet. No Channel3 results are shown.'
-            : 'No CHANNEL3_API_KEY configured. Channel3 discovery is a planned adapter; nothing here comes from Channel3.',
+          status: channel3Discovery.status,
+          detail: channel3Discovery.detail,
         },
       ],
+      channel3: channel3Discovery,
       proposals: proposals.map((p) =>
         toProposalView(p, names, {
           tenantId: principal.tenantId,
@@ -296,6 +299,9 @@ export class NeedMeshService {
                 'No PayPal credentials are configured, so payment steps use a clearly labelled simulated rail. Identifiers start with SIM- and are never PayPal records.',
             },
       mcp: this.mcp.peek(),
+      ai: this.llm.modelTasks.includes('mission.narrate')
+        ? { provider: this.llm.name.split('+')[0]!, model: this.llm.model }
+        : { provider: 'deterministic', model: null },
       budget: {
         limitMinor: mission.budgetMinor.toString(),
         committedMinor: committed.toString(),
@@ -358,7 +364,10 @@ export class NeedMeshService {
       );
 
     const started = new Date();
-    const { catalog, negotiated, accepted } = await this.catalogFor(missionId, spec.productKind);
+    const [{ catalog, negotiated, accepted }, channel3Discovery] = await Promise.all([
+      this.catalogFor(missionId, spec.productKind),
+      this.channel3.discover(spec, principal.userId),
+    ]);
     const plan = planMission({
       intent: spec,
       catalog,
@@ -381,7 +390,7 @@ export class NeedMeshService {
         node: 'product_discovery',
         label: 'Product discovery',
         status: 'DONE',
-        output: `${catalog.length} listings for "${spec.productKind}" in the connected merchant catalog. Channel3: ${this.env.CHANNEL3_API_KEY ? 'key present, adapter not integrated' : 'not configured'}.`,
+        output: `${catalog.length} listings for "${spec.productKind}" in the connected merchant catalog. ${channel3Discovery.detail}`,
       },
       {
         node: 'merchant_matching',
@@ -1670,9 +1679,7 @@ export class NeedMeshService {
       where: { id: missionId },
       data: { state, version: { increment: 1 } },
     });
-    await this.outbox.append(tx, {
-      tenantId: mission.orgTenantId,
-      aggregateType: 'mission',
+    await this.outbox.appendMission(tx, {
       aggregateId: missionId,
       version: updated.version,
       eventType,

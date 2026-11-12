@@ -56,12 +56,11 @@ const EnvSchema = z.object({
         .filter(Boolean),
     ),
   ENABLE_LIVE_PAYPAL_WRITES: bool,
-  LLM_PROVIDER: z.enum(['fixture', 'openai', 'anthropic', 'gemini']).default('fixture'),
+  LLM_PROVIDER: z.enum(['fixture', 'gemini']).default('fixture'),
   LLM_MODEL: z
     .string()
     .optional()
     .transform((v) => v || undefined),
-  OPENAI_API_KEY: optionalSecret,
   GEMINI_API_KEY: optionalSecret,
   /**
    * Hard caps for Gemini. Unset means the conservative free-tier budget (under the tightest
@@ -71,11 +70,12 @@ const EnvSchema = z.object({
   GEMINI_RPM: optionalCount(60),
   GEMINI_RPD: optionalCount(100_000),
   GEMINI_TPM: optionalCount(10_000_000),
-  ANTHROPIC_API_KEY: optionalSecret,
-  /** Presence is reported only; the Channel3 discovery adapter is not integrated yet. */
+  /** Server-side Channel3 catalog key. When unset, mission discovery skips Channel3. */
   CHANNEL3_API_KEY: optionalSecret,
   DEMO_MODE: bool,
   DEMO_AUTH_ENABLED: bool,
+  /** Password the seed sets on every fictional account. Sign-in checks it like any other password. */
+  DEMO_ACCOUNT_PASSWORD: z.string().min(8).default('needmesh-sandbox'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 });
 

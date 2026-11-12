@@ -23,6 +23,7 @@ import type {
   OffersResponse,
   PayPalHealth,
   Persona,
+  PresenceView,
   PurchaseDetail,
   SnapshotDetail,
   SnapshotsPage,
@@ -65,6 +66,14 @@ export const usePayPalHealth = () =>
     queryFn: () => api<PayPalHealth>('/v1/integrations/paypal/health'),
     staleTime: 60_000,
   });
+/** Heartbeat + read in one call: while mounted, tells the API this user is here every 5 s. */
+export const usePresence = (missionId: string | null) =>
+  useQuery({
+    queryKey: ['presence', missionId ?? 'app'] as const,
+    queryFn: () => api<PresenceView>('/v1/presence', { method: 'POST', body: { missionId } }),
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: true,
+  });
 export const useDashboard = () =>
   useQuery({ queryKey: qk.dashboard, queryFn: () => api<DashboardView>('/v1/operations/summary') });
 export const useScenarios = () =>
@@ -97,7 +106,7 @@ export const useMissionLifecycle = (id: string) =>
   useQuery({
     queryKey: [...qk.mission(id), 'lifecycle'] as const,
     queryFn: () => api<MissionLifecycleView>(`/v1/missions/${id}/lifecycle`),
-    refetchInterval: 15_000,
+    refetchInterval: 10_000,
   });
 
 export function useMissionActions(missionId: string) {

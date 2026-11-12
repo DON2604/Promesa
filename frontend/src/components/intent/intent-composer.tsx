@@ -686,7 +686,7 @@ function MissionBlueprint({ draft, complete }: { draft: IntentDraft; complete: b
     ...draft.prohibitedAttributes.map((a) => `Must not be ${a.replace(/_/g, ' ')}`),
   ].filter(Boolean);
   const strategy = [
-    'Discover listings from connected merchant catalogs (Channel3 not configured).',
+    'Discover orderable listings from connected merchants. Channel3 adds external product metadata and affiliate links; it does not create PayPal orders.',
     'Exclude any listing that breaks a hard rule, with the reason shown.',
     'Split the quantity across merchants for the lowest total within budget.',
     'Optionally publish to the marketplace so merchants can offer and sponsors can fund.',

@@ -12,6 +12,7 @@ export type Principal = {
   tenantTimezone: string;
   role: Role;
   memberships: Array<{ tenantId: string; tenantName: string; tenantKind: TenantKind; role: Role }>;
+  identityProvider: 'DEMO' | 'PASSWORD';
 };
 
 export type AuthedRequest = FastifyRequest & { principal?: Principal };

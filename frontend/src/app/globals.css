@@ -213,6 +213,98 @@ mark.span-mark[data-field='budgetMinor'] {
   will-change: transform;
 }
 
+/* ---------- AI Command Center ---------- */
+.ai-stage {
+  background:
+    radial-gradient(60% 70% at 50% 50%, rgb(0 98 214 / 0.16), transparent 70%),
+    linear-gradient(180deg, #071630 0%, #0b1f3a 100%);
+  color: #e6eefb;
+}
+.ai-stage .ai-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.ai-flow {
+  stroke-dasharray: 3 7;
+  animation: ai-flow 1.6s linear infinite;
+}
+@keyframes ai-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.ai-node-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-pulse 1.4s ease-out infinite;
+}
+@keyframes ai-pulse {
+  from {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  to {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+.ai-hub-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-spin 9s linear infinite;
+}
+.ai-hub-spin.fast {
+  animation-duration: 1.8s;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ai-shimmer {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.14), transparent);
+  background-size: 200% 100%;
+  animation: ai-shimmer 1.3s linear infinite;
+}
+@keyframes ai-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+.ai-caret::after {
+  content: '▍';
+  margin-left: 1px;
+  animation: ai-blink 0.9s steps(1) infinite;
+}
+@keyframes ai-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.ai-reveal {
+  animation: ai-reveal 420ms var(--ease-paper) both;
+}
+@keyframes ai-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.toast-in {
+  animation: toast-in 360ms var(--ease-paper) both;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

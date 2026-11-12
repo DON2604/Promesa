@@ -39,7 +39,7 @@ interactions. All of them render live API data:
 - **Allocation Ribbon**: the budget split by merchant order, with each sponsor and released amounts.
 - **Agent graph**: the stored planning or recovery run, node by node.
 - **Supply Constellation**: every listing considered (eligible, excluded or allocated), with freshness
-  labels and the discovery sources (Channel3 is shown as not configured).
+  labels and the discovery sources (Channel3 is active when the API has a key, otherwise not configured).
 - **Negotiation**: merchant offers, the agent's recommendation and the org's accept, counter or decline.
 - **Sponsors**: who funded which order, and what is still unfunded.
 - **Order cards**: PayPal IDs, funded-by and negotiated badges, and a per-order **PromiseTwin** panel

@@ -4,7 +4,15 @@ import type { Role } from '@promesa/contracts';
 export const SESSION_COOKIE = 'promesa_session';
 export const SESSION_TTL_SECONDS = 8 * 60 * 60;
 
-export type SessionClaims = { v: 1; sub: string; tid: string; role: Role; exp: number };
+export type SessionClaims = {
+  v: 1;
+  sub: string;
+  tid: string;
+  role: Role;
+  exp: number;
+  /** Absent on tokens issued before password sign-in existed; those came from the demo provider. */
+  idp?: 'DEMO' | 'PASSWORD';
+};
 
 function sign(body: string, secret: string): string {
   return createHmac('sha256', secret).update(body).digest('base64url');

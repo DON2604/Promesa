@@ -36,6 +36,7 @@ export type ApiErrorBody = {
 
 export type Persona = {
   key: string;
+  email: string;
   displayName: string;
   title: string;
   tenantName: string;
@@ -44,12 +45,26 @@ export type Persona = {
   summary: string;
 };
 
+/** Who has the app open right now (heartbeat-based, informational only). */
+export type PresenceView = {
+  onlineTotal: number;
+  users: Array<{
+    userId: string;
+    displayName: string;
+    tenantName: string;
+    tenantKind: TenantKind;
+    role: Role;
+    isYou: boolean;
+    since: string;
+  }>;
+};
+
 export type Me = {
   user: { id: string; displayName: string; email: string };
   activeTenant: { id: string; name: string; kind: TenantKind; timezone: string };
   activeRole: Role;
   memberships: Array<{ tenantId: string; tenantName: string; tenantKind: TenantKind; role: Role }>;
-  identityProvider: 'DEMO';
+  identityProvider: 'DEMO' | 'PASSWORD';
 };
 
 // ---------- commerce ----------

@@ -50,7 +50,12 @@ export function useEventStream(enabled: boolean): StreamStatus {
       queue(qk.dashboard);
       if (evt.aggregateType === 'twin') queue(qk.twin(evt.aggregateId));
       if (evt.aggregateType === 'purchase') queue(qk.purchase(evt.aggregateId));
-      if (evt.aggregateType === 'mission') queue(qk.mission(evt.aggregateId));
+      if (evt.aggregateType === 'mission') {
+        queue(qk.mission(evt.aggregateId));
+        queue(['merchant-workspace']);
+        queue(['marketplace']);
+        queue(['notifications']);
+      }
       if (evt.aggregateType === 'demo') queue(qk.scenarios);
     };
     source.onerror = () => {

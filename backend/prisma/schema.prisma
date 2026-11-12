@@ -147,6 +147,8 @@ model User {
   authSubject String       @unique
   email       String       @unique
   displayName String
+  /// scrypt hash (`scrypt$N$r$p$salt$hash`). Null means the account cannot sign in with a password.
+  passwordHash String?
   verifiedAt  DateTime?
   disabledAt  DateTime?
   createdAt   DateTime     @default(now())

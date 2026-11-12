@@ -11,7 +11,7 @@ import type {
   ProposalView,
 } from '@promesa/contracts';
 import { errorMessage } from '@/lib/api';
-import { humanize, money } from '@/lib/format';
+import { humanize, money, shortWhen, type Tone } from '@/lib/format';
 import { useAnimeScope } from '@/lib/motion';
 import type { useMissionActions } from '@/lib/queries';
 import { Button, Chip, SectionHeading, Sheet } from '@/components/ui';
@@ -185,6 +185,108 @@ export function AllocationRibbon({ lc }: { lc: MissionLifecycleView }) {
   );
 }
 
+function discoveryTone(status: MissionLifecycleView['discoverySources'][number]['status']): Tone {
+  if (status === 'ACTIVE') return 'good';
+  if (status === 'UNAVAILABLE') return 'caution';
+  return 'neutral';
+}
+
+function discoveryLabel(
+  status: MissionLifecycleView['discoverySources'][number]['status'],
+): string {
+  if (status === 'ACTIVE') return 'active';
+  if (status === 'UNAVAILABLE') return 'unavailable';
+  return 'not configured';
+}
+
+function formatMajor(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+/** Channel3 catalog hits. Shown beside the orderable constellation, never as a PayPal order. */
+export function Channel3Panel({ lc, timezone }: { lc: MissionLifecycleView; timezone: string }) {
+  const discovery = lc.channel3;
+  if (discovery.status === 'NOT_CONFIGURED') return null;
+  return (
+    <Sheet className="p-5">
+      <SectionHeading
+        kicker="Channel3"
+        title="External product discovery"
+        aside={
+          <Chip tone={discovery.status === 'ACTIVE' ? 'good' : 'caution'}>
+            {discovery.status === 'ACTIVE' ? 'Catalog metadata' : 'Unavailable'}
+          </Chip>
+        }
+      />
+      <p className="mt-2 max-w-3xl text-sm text-muted">{discovery.detail}</p>
+      {discovery.observedAt ? (
+        <p className="mt-1 text-xs text-muted">
+          Fetched {shortWhen(discovery.observedAt, timezone)}.
+        </p>
+      ) : null}
+      {discovery.products.length > 0 ? (
+        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+          {discovery.products.map((product) => (
+            <li key={product.id} className="flex gap-3 rounded-md border border-hairline p-3">
+              {product.imageUrl ? (
+                // Hosts come from Channel3 and merchants, so this cannot be a configured next/image source.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={product.imageUrl}
+                  alt=""
+                  className="size-16 shrink-0 rounded-sm border border-hairline object-contain"
+                />
+              ) : null}
+              <div className="min-w-0">
+                <p className="font-medium text-ink">{product.title}</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {[product.brand, product.category].filter(Boolean).join(' · ') ||
+                    'Channel3 catalog'}
+                </p>
+                {product.offers.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted">No buy link in this response.</p>
+                ) : (
+                  <ul className="mt-2 space-y-1.5">
+                    {product.offers.map((offer) => (
+                      <li key={offer.url} className="text-sm">
+                        <a
+                          href={offer.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-signal hover:underline"
+                        >
+                          Buy at {offer.domain}
+                        </a>
+                        <span className="text-muted">
+                          {' '}
+                          · {formatMajor(offer.price, offer.currency)}
+                          {offer.compareAtPrice !== null && offer.compareAtPrice > offer.price ? (
+                            <s className="ml-1">
+                              {formatMajor(offer.compareAtPrice, offer.currency)}
+                            </s>
+                          ) : null}
+                          {' · '}
+                          {offer.availability === 'InStock'
+                            ? 'merchant reports in stock'
+                            : 'merchant reports out of stock'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </Sheet>
+  );
+}
+
 /* ---------- Supply Constellation: mission at the centre, listings around it ---------- */
 
 export function SupplyConstellation({ lc }: { lc: MissionLifecycleView }) {
@@ -222,8 +324,8 @@ export function SupplyConstellation({ lc }: { lc: MissionLifecycleView }) {
         aside={
           <div className="flex flex-wrap gap-1.5">
             {lc.discoverySources.map((s) => (
-              <Chip key={s.name} tone={s.status === 'ACTIVE' ? 'good' : 'neutral'} title={s.detail}>
-                {s.name} · {s.status === 'ACTIVE' ? 'active' : 'not configured'}
+              <Chip key={s.name} tone={discoveryTone(s.status)} title={s.detail}>
+                {s.name} · {discoveryLabel(s.status)}
               </Chip>
             ))}
           </div>

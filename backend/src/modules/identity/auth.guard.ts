@@ -76,6 +76,7 @@ export class AuthGuard implements CanActivate {
         tenantKind: m.tenant.kind as TenantKind,
         role: m.role as Role,
       })),
+      identityProvider: claims.idp ?? 'DEMO',
     };
   }
 }

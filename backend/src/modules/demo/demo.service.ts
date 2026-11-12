@@ -3,6 +3,7 @@ import { type DemoScenarioView, type IntentSpec } from '@promesa/contracts';
 import { type Prisma } from '@prisma/client';
 import { AppError } from '../../common/errors';
 import { hashObject } from '../../common/hash';
+import { hashPassword } from '../../common/password';
 import { ENV, type Env } from '../../config/env';
 import { PrismaService, type Tx } from '../../infra/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -82,6 +83,7 @@ export class DemoService {
       });
     }
     for (const p of PERSONAS) {
+      const passwordHash = await hashPassword(this.env.DEMO_ACCOUNT_PASSWORD);
       await this.prisma.user.upsert({
         where: { id: p.userId },
         create: {
@@ -89,9 +91,10 @@ export class DemoService {
           authSubject: `demo|${p.key}`,
           email: p.email,
           displayName: p.displayName,
+          passwordHash,
           verifiedAt: new Date(),
         },
-        update: { displayName: p.displayName, email: p.email },
+        update: { displayName: p.displayName, email: p.email, passwordHash },
       });
       for (const m of p.memberships) {
         await this.prisma.membership.upsert({
@@ -106,6 +109,7 @@ export class DemoService {
       IDS.tenants.kraftfold,
       IDS.tenants.cleanStart,
       IDS.tenants.beaconBasics,
+      IDS.tenants.harborGoods,
     ]) {
       const existing = await this.prisma.merchantConnection.findFirst({ where: { tenantId } });
       if (!existing) {

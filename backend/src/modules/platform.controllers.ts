@@ -1,13 +1,19 @@
 import { connect } from 'node:net';
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Req, Res } from '@nestjs/common';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { type DashboardView, type StreamEvent, type TwinHealth } from '@promesa/contracts';
+import {
+  type DashboardView,
+  type PresenceView,
+  type StreamEvent,
+  type TwinHealth,
+} from '@promesa/contracts';
 import type { FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { ZodPipe } from '../common/zod';
 import { ENV, type Env } from '../config/env';
 import { PrismaService } from '../infra/prisma.service';
 import { DemoService } from './demo/demo.service';
+import { PresenceService } from './events/presence.service';
 import {
   type AuthedRequest,
   CorrelationId,
@@ -191,6 +197,26 @@ export class StreamController {
       closed = true;
       clearInterval(timer);
     });
+  }
+}
+
+const PresenceSchema = z.object({ missionId: z.string().uuid().nullable().optional() });
+
+@ApiTags('events')
+@Controller('v1/presence')
+export class PresenceController {
+  constructor(private readonly presence: PresenceService) {}
+
+  @Post()
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Heartbeat: the signed-in user has the app (or a mission) open.' })
+  heartbeat(
+    @CurrentPrincipal() principal: Principal,
+    @Body(new ZodPipe(PresenceSchema)) body: z.infer<typeof PresenceSchema>,
+  ): PresenceView {
+    const missionId = body.missionId ?? null;
+    this.presence.heartbeat(principal, missionId);
+    return this.presence.list(principal, missionId);
   }
 }
 

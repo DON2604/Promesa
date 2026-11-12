@@ -67,17 +67,17 @@ OpenAPI at `/docs` and `/openapi.json`.
 Copy `.env.example` to `.env`. Secrets are optional. Without them the API runs fully offline on
 labelled simulations.
 
-| Variable                                                                   | Effect when unset                                                |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`                                 | Simulated PayPal rail (`SIM-…` ids), labelled everywhere         |
-| `ENABLE_LIVE_PAYPAL_WRITES`                                                | Sandbox writes disabled even with credentials                    |
-| `PAYPAL_WEBHOOK_ID`                                                        | Webhook endpoint returns 503 `WEBHOOKS_NOT_CONFIGURED`           |
-| `PAYPAL_MCP_ENABLED`                                                       | Recovery reads PayPal through REST instead of MCP                |
-| `LLM_PROVIDER` + `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | Deterministic `fixture` provider                                 |
-| `CHANNEL3_API_KEY`                                                         | Reported only. The Channel3 adapter is **not integrated**        |
-| `DEMO_MODE`, `DEMO_AUTH_ENABLED`                                           | Demo merchant console, demo verification and persona sign-in off |
+| Variable                                   | Effect when unset                                                |
+| ------------------------------------------ | ---------------------------------------------------------------- |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | Simulated PayPal rail (`SIM-…` ids), labelled everywhere         |
+| `ENABLE_LIVE_PAYPAL_WRITES`                | Sandbox writes disabled even with credentials                    |
+| `PAYPAL_WEBHOOK_ID`                        | Webhook endpoint returns 503 `WEBHOOKS_NOT_CONFIGURED`           |
+| `PAYPAL_MCP_ENABLED`                       | Recovery reads PayPal through REST instead of MCP                |
+| `LLM_PROVIDER=gemini` + `GEMINI_API_KEY`   | Deterministic `fixture` provider                                 |
+| `CHANNEL3_API_KEY`                         | Mission discovery searches Channel3. Unset: Channel3 is off      |
+| `DEMO_MODE`, `DEMO_AUTH_ENABLED`           | Demo merchant console, demo verification and persona sign-in off |
 
-Gemini, when configured, defaults to `gemini-2.5-flash-lite` and a local free-tier budget of
+Gemini, when configured, defaults to `gemini-3.5-flash-lite` and a local free-tier budget of
 4 requests per minute and 15 per day (under the tightest published free-tier figures). Past that
 budget, or if Gemini answers 429, narration uses the deterministic text and the mission request
 still succeeds. There are no retries. Set `GEMINI_RPM`, `GEMINI_RPD` and `GEMINI_TPM` to the

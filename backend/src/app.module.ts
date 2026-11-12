@@ -8,7 +8,7 @@ import { CompositeLLMProvider } from './modules/agents/composite-provider';
 import { FixtureLLMProvider } from './modules/agents/fixture-provider';
 import { GeminiBudget, freeTierBudget } from './modules/agents/gemini-budget';
 import { LLM_PROVIDER } from './modules/agents/llm-provider';
-import { OpenAICompatibleProvider } from './modules/agents/openai-compatible-provider';
+import { GeminiProvider } from './modules/agents/gemini-provider';
 import {
   IntentController,
   MissionsController,
@@ -17,6 +17,7 @@ import {
 } from './modules/api.controllers';
 import { AuditService } from './modules/audit/audit.service';
 import { CatalogService } from './modules/commerce/catalog.service';
+import { Channel3Service } from './modules/commerce/channel3.service';
 import { DemoService } from './modules/demo/demo.service';
 import { OutboxService } from './modules/events/outbox.service';
 import { AuthController } from './modules/identity/auth.controller';
@@ -42,8 +43,10 @@ import {
   DemoController,
   HealthController,
   OperationsController,
+  PresenceController,
   StreamController,
 } from './modules/platform.controllers';
+import { PresenceService } from './modules/events/presence.service';
 import { PurchasesService } from './modules/purchases/purchases.service';
 import { TwinEngine } from './modules/promisetwin/twin-engine';
 import { TwinsService } from './modules/promisetwin/twins.service';
@@ -68,6 +71,7 @@ class CoreModule {}
     TwinsController,
     OperationsController,
     StreamController,
+    PresenceController,
     PayPalController,
     PayPalWebhookController,
     DemoController,
@@ -81,45 +85,27 @@ class CoreModule {}
       useFactory: (env: Env) => {
         const fixture = new FixtureLLMProvider();
         if (env.LLM_PROVIDER === 'fixture') return fixture;
-        // Real models narrate plans and recovery decisions; intent compilation stays deterministic.
-        if (env.LLM_PROVIDER === 'openai') {
-          if (!env.OPENAI_API_KEY) throw new Error('LLM_PROVIDER=openai requires OPENAI_API_KEY.');
-          return new CompositeLLMProvider(
-            new OpenAICompatibleProvider({
-              name: 'openai',
-              baseUrl: 'https://api.openai.com/v1',
-              apiKey: env.OPENAI_API_KEY,
-              model: env.LLM_MODEL ?? 'gpt-4o-mini',
-            }),
-            fixture,
-          );
-        }
-        if (env.LLM_PROVIDER === 'gemini') {
-          if (!env.GEMINI_API_KEY) throw new Error('LLM_PROVIDER=gemini requires GEMINI_API_KEY.');
-          // 2.0-flash's free quota is reported as zero, so the default is a model that still has one.
-          const model = env.LLM_MODEL ?? 'gemini-2.5-flash-lite';
-          const base = freeTierBudget(model);
-          const budget = new GeminiBudget(
-            {
-              requestsPerMinute: env.GEMINI_RPM ?? base.requestsPerMinute,
-              requestsPerDay: env.GEMINI_RPD ?? base.requestsPerDay,
-              tokensPerMinute: env.GEMINI_TPM ?? base.tokensPerMinute,
-            },
-            { file: join(process.cwd(), '.data', 'gemini-budget.json') },
-          );
-          return new CompositeLLMProvider(
-            new OpenAICompatibleProvider({
-              name: 'gemini',
-              baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-              apiKey: env.GEMINI_API_KEY,
-              model,
-              budget,
-            }),
-            fixture,
-          );
-        }
-        throw new Error(
-          `LLM_PROVIDER=${env.LLM_PROVIDER} is not implemented yet. Use fixture, openai or gemini.`,
+        // Gemini narrates plans and recovery decisions; intent compilation stays deterministic.
+        if (!env.GEMINI_API_KEY) throw new Error('LLM_PROVIDER=gemini requires GEMINI_API_KEY.');
+        // 2.5-flash-lite is closed to new API keys and 2.0-flash has no free quota.
+        const model = env.LLM_MODEL ?? 'gemini-3.5-flash-lite';
+        const base = freeTierBudget(model);
+        const budget = new GeminiBudget(
+          {
+            requestsPerMinute: env.GEMINI_RPM ?? base.requestsPerMinute,
+            requestsPerDay: env.GEMINI_RPD ?? base.requestsPerDay,
+            tokensPerMinute: env.GEMINI_TPM ?? base.tokensPerMinute,
+          },
+          { file: join(process.cwd(), '.data', 'gemini-budget.json') },
+        );
+        return new CompositeLLMProvider(
+          new GeminiProvider({
+            baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+            apiKey: env.GEMINI_API_KEY,
+            model,
+            budget,
+          }),
+          fixture,
         );
       },
     },
@@ -152,11 +138,13 @@ class CoreModule {}
     MarketplaceService,
     IntentService,
     CatalogService,
+    Channel3Service,
     TwinEngine,
     TwinsService,
     PurchasesService,
     MissionsService,
     DemoService,
+    PresenceService,
   ],
 })
 export class AppModule {}

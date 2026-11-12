@@ -8,7 +8,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { Me, Role } from '@promesa/contracts';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { humanize } from '@/lib/format';
-import { useMe, useNotifications } from '@/lib/queries';
+import { useMe, useNotifications, usePresence } from '@/lib/queries';
 import { useEventStream, type StreamStatus } from '@/lib/use-event-stream';
 import { Wordmark } from './brand';
 import { PayPalStatus } from './paypal-status';
@@ -59,6 +59,61 @@ function navFor(me: Me): Array<{ href: string; label: string }> {
   items.push({ href: '/protection', label: 'Protection' });
   if (!MERCHANT_ROLES.includes(role)) items.push({ href: '/settings', label: 'Settings' });
   return items;
+}
+
+const MISSION_PATH = /^\/missions\/([0-9a-f-]{36})/;
+const missionIdFrom = (pathname: string) => MISSION_PATH.exec(pathname)?.[1] ?? null;
+
+export function roleColor(role: Role): string {
+  if (role === 'SPONSOR') return 'bg-good';
+  if (MERCHANT_ROLES.includes(role)) return 'bg-caution';
+  if (ORG_ROLES.includes(role)) return 'bg-signal';
+  return 'bg-ink';
+}
+
+export function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((p) => p[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function Identity({ me }: { me: Me }) {
+  return (
+    <span className="hidden items-center gap-2 sm:inline-flex" title={me.user.email}>
+      <span
+        aria-hidden
+        className={clsx(
+          'inline-flex size-8 items-center justify-center rounded-full text-[12px] font-semibold text-paper',
+          roleColor(me.activeRole),
+        )}
+      >
+        {initials(me.user.displayName)}
+      </span>
+      <span className="leading-tight">
+        <span className="block text-[13px] font-medium text-ink">{me.user.displayName}</span>
+        <span className="block text-[11px] text-muted">{humanize(me.activeRole)}</span>
+      </span>
+    </span>
+  );
+}
+
+/** Keeps this user's presence fresh (scoped to the open mission) and shows who else is online. */
+function OnlineCount({ missionId }: { missionId: string | null }) {
+  const presence = usePresence(missionId);
+  const total = presence.data?.onlineTotal ?? 0;
+  if (total === 0) return null;
+  return (
+    <span
+      className="hidden items-center gap-1.5 rounded-full border border-good/40 bg-good-soft px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.1em] text-good xl:inline-flex"
+      title="People with NeedMesh open right now"
+    >
+      <span aria-hidden className="size-1.5 animate-pulse rounded-full bg-good" />
+      {total} online
+    </span>
+  );
 }
 
 const STREAM_LABEL: Record<StreamStatus, string> = {
@@ -128,14 +183,14 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh">
-      <div className="border-b border-caution/30 bg-caution-soft">
+      <div className="border-b border-signal/20 bg-signal-soft">
         <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-2 px-5 py-1.5 text-[12.5px] text-ink sm:px-8">
           <p>
-            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-caution">
-              Demo mode
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-signal-strong">
+              PayPal Sandbox
             </span>{' '}
-            · Fictional merchants and simulated fulfillment events. PayPal Sandbox only, no real
-            charges.
+            · Real PayPal Sandbox API calls, no real money. Organizations and merchants are
+            fictional.
           </p>
           <div className="hidden md:block">
             <PayPalStatus compact />
@@ -185,6 +240,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               />
               {STREAM_LABEL[stream]}
             </span>
+            <OnlineCount missionId={missionIdFrom(pathname)} />
+            <Identity me={data} />
             <label className="sr-only" htmlFor="role-switch">
               Active workspace and role
             </label>

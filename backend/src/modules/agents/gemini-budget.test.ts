@@ -11,7 +11,7 @@ import {
   pacificDay,
   type GeminiLimits,
 } from './gemini-budget';
-import { OpenAICompatibleProvider } from './openai-compatible-provider';
+import { GeminiProvider } from './gemini-provider';
 
 const LIMITS: GeminiLimits = { requestsPerMinute: 4, requestsPerDay: 15, tokensPerMinute: 1_000 };
 
@@ -115,11 +115,11 @@ describe('Gemini client', () => {
   };
 
   function provider(now: () => number) {
-    return new OpenAICompatibleProvider({
-      name: 'gemini',
+    return new GeminiProvider({
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
       apiKey: 'test-key',
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.5-flash-lite',
+      retryDelayMs: 0,
       budget: new GeminiBudget(
         { requestsPerMinute: 4, requestsPerDay: 15, tokensPerMinute: 200_000 },
         { now },
@@ -164,5 +164,36 @@ describe('Gemini client', () => {
     now += 5_000;
     await expect(client.generateStructured(request)).rejects.toBeInstanceOf(LlmDeclined);
     expect(calls).toBe(1);
+  });
+
+  it('retries a 503 once and uses the second answer', async () => {
+    const statuses = [503, 200];
+    vi.stubGlobal('fetch', async () => {
+      const status = statuses.shift() ?? 500;
+      return status === 200
+        ? new Response(
+            JSON.stringify({ choices: [{ message: { content: JSON.stringify(narration) } }] }),
+            { status },
+          )
+        : new Response('{}', { status });
+    });
+    let now = Date.parse('2026-11-10T18:00:00Z');
+    const client = provider(() => (now += 2_000));
+    await expect(client.generateStructured(request)).resolves.toMatchObject({
+      headline: narration.headline,
+    });
+    expect(statuses).toHaveLength(0);
+  });
+
+  it('gives up after the single 5xx retry', async () => {
+    let calls = 0;
+    vi.stubGlobal('fetch', async () => {
+      calls += 1;
+      return new Response('{}', { status: 503 });
+    });
+    let now = Date.parse('2026-11-10T18:00:00Z');
+    const client = provider(() => (now += 2_000));
+    await expect(client.generateStructured(request)).rejects.toBeInstanceOf(LlmDeclined);
+    expect(calls).toBe(2);
   });
 });

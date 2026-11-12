@@ -23,18 +23,18 @@ purchase. Built for the PayPal AI Hackathon.
 
 ## What is real and what is simulated
 
-| Piece                                  | Status                                                                                                                                                                                                                          |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Mission planning, policy engine, state | Real, deterministic, unit-tested                                                                                                                                                                                                |
-| PayPal Orders v2 / Payments v2         | Real **PayPal Sandbox** REST calls when `PAYPAL_CLIENT_ID/SECRET` are set and `ENABLE_LIVE_PAYPAL_WRITES=true`. Written to the PayPal docs and tested against a mocked fetch. Not yet exercised against a live Sandbox account. |
-| Without Sandbox credentials            | A **Simulated rail** (`SIM-…` ids) runs the same lifecycle. Every order, the header and the receipt are labelled Simulated. It never looks like a PayPal record.                                                                |
-| PayPal MCP (Agent toolkit)             | Official `@paypal/mcp` over stdio, used **read-only** (`get_order`) before the Recovery Agent acts. It has no authorization-void tool, so voids use REST.                                                                       |
-| Webhooks                               | `POST /v1/paypal/webhooks` verifies the signature through PayPal and de-duplicates events. Needs `PAYPAL_WEBHOOK_ID`.                                                                                                           |
-| LLM narration                          | Optional (OpenAI or Gemini). Every number in the narration is checked against the planner's figures; otherwise the deterministic text is used. Defaults to offline fixtures.                                                    |
-| Marketplace, offers, sponsors          | Real code paths (publish, offers, counteroffers, cross-tenant sponsor funding). Merchants and sponsors are fictional demo personas.                                                                                             |
-| Channel3 discovery                     | **Not integrated.** Discovery uses the connected merchant catalog; the UI shows Channel3 as not configured.                                                                                                                     |
-| Org verification                       | Demo review only (`DEMO_REVIEW`), no real KYC.                                                                                                                                                                                  |
-| Merchants, stock, shipping, delivery   | Fictional and simulated (demo merchant console). Labelled.                                                                                                                                                                      |
+| Piece                                  | Status                                                                                                                                                                                                                                   |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mission planning, policy engine, state | Real, deterministic, unit-tested                                                                                                                                                                                                         |
+| PayPal Orders v2 / Payments v2         | Real **PayPal Sandbox** REST calls when `PAYPAL_CLIENT_ID/SECRET` are set and `ENABLE_LIVE_PAYPAL_WRITES=true`. Written to the PayPal docs and tested against a mocked fetch. Not yet exercised against a live Sandbox account.          |
+| Without Sandbox credentials            | A **Simulated rail** (`SIM-…` ids) runs the same lifecycle. Every order, the header and the receipt are labelled Simulated. It never looks like a PayPal record.                                                                         |
+| PayPal MCP (Agent toolkit)             | Official `@paypal/mcp` over stdio, used **read-only** (`get_order`) before the Recovery Agent acts. It has no authorization-void tool, so voids use REST.                                                                                |
+| Webhooks                               | `POST /v1/paypal/webhooks` verifies the signature through PayPal and de-duplicates events. Needs `PAYPAL_WEBHOOK_ID`.                                                                                                                    |
+| LLM narration                          | Optional Gemini (`gemini-3.5-flash-lite`). Every number in the narration is checked against the planner's figures; otherwise the deterministic text is used. Defaults to offline fixtures.                                               |
+| Marketplace, offers, sponsors          | Real code paths (publish, offers, counteroffers, cross-tenant sponsor funding). Merchants and sponsors are fictional demo personas.                                                                                                      |
+| Channel3 discovery                     | Real catalog search when `CHANNEL3_API_KEY` is set. Results are merchant-reported prices and affiliate links, labelled as such, and are not NeedMesh orders or a stock guarantee. Without a key the UI shows Channel3 as not configured. |
+| Org verification                       | Demo review only (`DEMO_REVIEW`), no real KYC.                                                                                                                                                                                           |
+| Merchants, stock, shipping, delivery   | Fictional and simulated (demo merchant console). Labelled.                                                                                                                                                                               |
 
 Not claimed: escrow, an official PayPal partnership, or PayPal Store Sync / Agent Ready (a future path
 only). NeedMesh never holds funds, and refunds of captured payments need the merchant's approval.
@@ -100,8 +100,8 @@ npm run demo:seed                             # shelter + bakery scenarios (fict
 npm run dev                                   # API on :4000, web on :3000
 ```
 
-Open <http://localhost:3000> and choose **Create a Mission** (signs in as Jordan) or **Explore Missions**.
-API docs: <http://localhost:4000/docs> (OpenAPI JSON at `/openapi.json`).
+Open [http://localhost:3000](http://localhost:3000) and choose **Create a Mission** (signs in as Jordan) or **Explore Missions**.
+API docs: [http://localhost:4000/docs](http://localhost:4000/docs) (OpenAPI JSON at `/openapi.json`).
 
 ### Using real PayPal Sandbox
 
@@ -111,7 +111,34 @@ API docs: <http://localhost:4000/docs> (OpenAPI JSON at `/openapi.json`).
    approve each order (`PUBLIC_BASE_URL` must be reachable from the browser).
 3. Optional: `PAYPAL_MCP_ENABLED=true` lets the Recovery Agent read orders through the official PayPal MCP server.
 4. Optional: register a webhook at `<public url>/v1/paypal/webhooks` and set `PAYPAL_WEBHOOK_ID`.
-5. Optional: `LLM_PROVIDER=openai|gemini` with the matching API key for narration.
+5. Optional: `LLM_PROVIDER=gemini` with `GEMINI_API_KEY` for narration.
+6. Set `DEMO_MODE=false` so merchants act from their own accounts instead of the simulated console.
+
+### Two-browser demo (Sandbox)
+
+Every seeded account signs in with email and password (`DEMO_ACCOUNT_PASSWORD`, default
+`needmesh-sandbox`). Each browser keeps its own session, so use two browsers (or one normal and one
+private window):
+
+| Account                      | Role                                                |
+| ---------------------------- | --------------------------------------------------- |
+| `jordan@harborlight.example` | Shelter admin: runs the agents, confirms receipt    |
+| `priya@sponsor.example`      | Shelter sponsor: approves orders on PayPal          |
+| `leo@northsidefund.example`  | External sponsor (Northside Community Fund)         |
+| `alex@cleanstart.example`    | CleanStart merchant: confirm stock, ship, stockout  |
+| `dana@beaconbasics.example`  | Beacon Basics merchant: offers, confirm stock, ship |
+| `hana@harborgoods.example`   | Harbor Goods merchant: picks up recovery re-plans   |
+
+1. Browser A: Jordan opens the shelter mission and clicks **Run NeedMesh agents**. The AI Command
+   Center shows the agents working, Gemini's explanation and the policy check.
+2. Browser B: Priya opens the same mission, clicks **Approve & authorize in PayPal** and logs in with
+   the Sandbox **personal** account. Browser A sees the PayPal authorization arrive live.
+3. Browser B: sign in as Alex (CleanStart) and click **Confirm stock**; the PayPal agent captures the
+   payment. Or click **Report stockout**: the Recovery agent voids the authorization on PayPal and
+   re-plans.
+4. Browser A: Jordan confirms receipt and the Mission Receipt is issued.
+
+`npm run demo:seed` resets the shelter mission to a fresh state.
 
 ### Corporate networks with TLS inspection
 

@@ -166,6 +166,41 @@ export type OrderProtectionView = {
   remedies: string[];
 };
 
+export type DiscoverySourceStatus = 'ACTIVE' | 'NOT_CONFIGURED' | 'UNAVAILABLE';
+
+/**
+ * One merchant offer from Channel3. The URL is an affiliate buy link fetched for this response.
+ * Price and availability are merchant-reported; they are not a NeedMesh stock or checkout guarantee.
+ */
+export type Channel3OfferView = {
+  domain: string;
+  url: string;
+  price: number;
+  currency: string;
+  compareAtPrice: number | null;
+  availability: 'InStock' | 'OutOfStock';
+};
+
+/** A Channel3 catalog product. It is not a connected-merchant listing and cannot be checked out here. */
+export type Channel3ProductView = {
+  id: string;
+  title: string;
+  brand: string | null;
+  imageUrl: string | null;
+  category: string | null;
+  offers: Channel3OfferView[];
+};
+
+export type Channel3DiscoveryView = {
+  status: DiscoverySourceStatus;
+  detail: string;
+  /** Text query sent to Channel3. Null when no search ran. */
+  query: string | null;
+  /** When these products were fetched. Null when there are no products. */
+  observedAt: string | null;
+  products: Channel3ProductView[];
+};
+
 export type SupplyNodeView = {
   productId: string;
   sku: string;
@@ -257,7 +292,9 @@ export type MissionLifecycleView = ReadModelMeta & {
   sponsors: Array<{ sponsorName: string; sponsorOrg: string; orders: number; amountMinor: string }>;
   unfundedMinor: string;
   supply: SupplyNodeView[];
-  discoverySources: Array<{ name: string; status: 'ACTIVE' | 'NOT_CONFIGURED'; detail: string }>;
+  discoverySources: Array<{ name: string; status: DiscoverySourceStatus; detail: string }>;
+  /** External catalog metadata. Never mixed into the orderable merchant catalog. */
+  channel3: Channel3DiscoveryView;
   proposals: ProposalView[];
   agentRuns: AgentRunView[];
   rail: { mode: PayPalRailMode; label: string; detail: string };
@@ -266,6 +303,8 @@ export type MissionLifecycleView = ReadModelMeta & {
     detail: string;
     tools: string[];
   };
+  /** Language model that narrates agent decisions, or `deterministic` when none is configured. */
+  ai: { provider: string; model: string | null };
   budget: {
     limitMinor: string;
     committedMinor: string;

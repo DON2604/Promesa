@@ -5,11 +5,12 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 // Phase 1 CSP. 'unsafe-inline' scripts are required by the theme bootstrap and Next's inline
 // runtime until nonce-based CSP lands (Phase 6). PayPal SDK origins are added with checkout.
+// https images: Channel3 product photos are served from Channel3 and merchant CDNs.
 const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data: blob: https:",
   "font-src 'self'",
   `connect-src 'self' ${apiOrigin}${isDev ? ' ws: http://localhost:*' : ''}`,
   "frame-ancestors 'none'",

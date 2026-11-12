@@ -14,7 +14,8 @@ import type {
 } from '@promesa/contracts';
 import { errorMessage } from '@/lib/api';
 import { humanize, money, shortWhen, type Tone } from '@/lib/format';
-import { useMe, useMissionActions } from '@/lib/queries';
+import { useMe, useMissionActions, usePresence } from '@/lib/queries';
+import { AiCommandCenter, LiveToasts, PresenceBar, type AiBusy } from './ai-command-center';
 import { Button, Chip, Kicker, SectionHeading, Sheet, SimulatedTag } from '@/components/ui';
 import {
   AgentRunGraph,
@@ -26,6 +27,7 @@ import {
   ProposalsPanel,
   ReceiptExport,
   SponsorsPanel,
+  Channel3Panel,
   SupplyConstellation,
 } from './mission-panels';
 
@@ -101,15 +103,20 @@ export function MissionControl({
   const actions = useMissionActions(missionId);
   usePayPalReturn(missionId, lc, actions);
 
+  const presence = usePresence(missionId);
+
   const isOrg = lc.viewerIsOrg && (role === 'ORG_ADMIN' || role === 'ORG_OPERATOR');
   const isSponsor = role === 'SPONSOR';
 
   return (
     <div className="space-y-8">
       <div className="space-y-3">
+        <PresenceBar presence={presence.data} />
         <MissionPulse lc={lc} />
         <Stepper lc={lc} />
       </div>
+      <AiCommandCenter lc={lc} busy={busyOf(actions)} presence={presence.data} />
+      <LiveToasts events={lc.events} />
       <NextStepBanner
         lc={lc}
         isOrg={isOrg}
@@ -138,6 +145,7 @@ export function MissionControl({
           <SponsorsPanel lc={lc} />
         </div>
       </div>
+      <Channel3Panel lc={lc} timezone={timezone} />
       <section className="space-y-4" aria-labelledby="orders">
         <SectionHeading
           id="orders"
@@ -156,7 +164,6 @@ export function MissionControl({
               <OrderCard
                 key={o.id}
                 order={o}
-                lc={lc}
                 role={role}
                 missionId={missionId}
                 actions={actions}
@@ -171,6 +178,18 @@ export function MissionControl({
       <Timeline events={lc.events} timezone={timezone} />
     </div>
   );
+}
+
+function busyOf(actions: Actions): AiBusy {
+  if (actions.plan.isPending) return 'plan';
+  if (actions.approve.isPending || actions.authorize.isPending) return 'approve';
+  if (actions.reconcile.isPending) return 'reconcile';
+  if (actions.merchant.isPending) {
+    const action = actions.merchant.variables?.action;
+    if (action === 'STOCKOUT') return 'recovery';
+    if (action === 'CONFIRM_STOCK') return 'capture';
+  }
+  return null;
 }
 
 /* ---------- PayPal return handling ---------- */
@@ -257,6 +276,10 @@ function NextStepBanner({
     ) &&
     lc.proposals.some((p) => p.state === 'ACCEPTED');
   const wrongRole = nextStep.actor === 'SPONSOR' && !isSponsor;
+  const isMerchantRole =
+    !isOrg &&
+    !isSponsor &&
+    lc.orders.some((o) => o.allowedActions.some((a) => a.startsWith('MERCHANT')));
   return (
     <Sheet stacked className="flex flex-wrap items-center justify-between gap-4 p-5">
       <div>
@@ -307,6 +330,12 @@ function NextStepBanner({
               </Link>
             ) : null}
           </>
+        ) : null}
+        {nextStep.actor === 'MERCHANT' && !isMerchantRole ? (
+          <p className="max-w-sm text-[13px] text-muted">
+            Waiting for the merchant. Sign in as the merchant in another browser (for example Alex
+            at CleanStart or Dana at Beacon Basics); this page updates when they act.
+          </p>
         ) : null}
         {nextStep.actor === 'ORG' && !isOrg ? (
           <Link
@@ -492,14 +521,12 @@ function IdLine({ label, value }: { label: string; value: string | null }) {
 
 function OrderCard({
   order,
-  lc,
   role,
   missionId,
   actions,
   timezone,
 }: {
   order: MissionOrderView;
-  lc: MissionLifecycleView;
   role: Role | undefined;
   missionId: string;
   actions: Actions;
@@ -516,6 +543,7 @@ function OrderCard({
   ].filter(Boolean);
   const dead = ['VOIDED', 'REFUNDED', 'CANCELLED'].includes(order.state);
   const canApprove = allowed.has('APPROVE');
+  const isMerchant = role === 'MERCHANT_ADMIN' || role === 'MERCHANT_OPERATOR';
 
   return (
     <Sheet as="article" className={clsx('p-5', dead && 'opacity-80')}>
@@ -638,13 +666,28 @@ function OrderCard({
 
       <OrderProtection order={order} />
 
-      {lc.demoControlsEnabled &&
-      (allowed.has('MERCHANT_CONFIRM') ||
-        allowed.has('MERCHANT_STOCKOUT') ||
-        allowed.has('MERCHANT_SHIP') ||
-        allowed.has('MERCHANT_APPROVE_REFUND')) ? (
-        <div className="mt-4 rounded-[var(--radius-control)] border border-dashed border-caution/60 bg-caution-soft p-3">
-          <p className="kicker text-caution">Simulated merchant console · demo only</p>
+      {allowed.has('MERCHANT_CONFIRM') ||
+      allowed.has('MERCHANT_STOCKOUT') ||
+      allowed.has('MERCHANT_SHIP') ||
+      allowed.has('MERCHANT_APPROVE_REFUND') ? (
+        <div
+          className={clsx(
+            'mt-4 rounded-[var(--radius-control)] border p-3',
+            isMerchant
+              ? 'border-caution/50 bg-caution-soft'
+              : 'border-dashed border-caution/60 bg-caution-soft',
+          )}
+        >
+          <p className="kicker text-caution">
+            {isMerchant
+              ? `${order.merchantName} · your merchant console`
+              : 'Simulated merchant console · demo only'}
+          </p>
+          {isMerchant && allowed.has('MERCHANT_CONFIRM') ? (
+            <p className="mt-1 text-[12px] text-muted">
+              Confirming stock lets the PayPal agent capture the authorized payment.
+            </p>
+          ) : null}
           <div className="mt-2 flex flex-wrap gap-2">
             {allowed.has('MERCHANT_CONFIRM') ? (
               <MerchantButton order={order} action="CONFIRM_STOCK" actions={actions}>

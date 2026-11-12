@@ -1084,9 +1084,7 @@ export class MarketplaceService {
       where: { id: missionId },
       data: { version: { increment: 1 } },
     });
-    await this.outbox.append(tx, {
-      tenantId: m.orgTenantId,
-      aggregateType: 'mission',
+    await this.outbox.appendMission(tx, {
       aggregateId: missionId,
       version: m.version,
       eventType,

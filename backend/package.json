@@ -17,6 +17,7 @@
     "db:reset": "prisma migrate reset --force --skip-seed && tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@channel3/sdk": "^4.9.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/helmet": "^13.0.2",
     "@fastify/static": "^10.1.2",

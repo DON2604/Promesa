@@ -57,7 +57,12 @@ export default function MissionPage() {
               {lc.rail.mode === 'SANDBOX' ? 'PayPal Sandbox' : 'Simulated PayPal rail'}
             </Chip>
           ) : null}
-          {m.isDemo ? <SimulatedTag /> : null}
+          {m.isDemo && lc?.rail.mode !== 'SANDBOX' ? <SimulatedTag /> : null}
+          {m.isDemo && lc?.rail.mode === 'SANDBOX' ? (
+            <Chip title="Created by the seed with fictional organizations and merchants">
+              Seeded sample mission
+            </Chip>
+          ) : null}
         </div>
       </header>
 

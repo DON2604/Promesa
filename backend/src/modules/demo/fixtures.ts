@@ -26,6 +26,8 @@ export const IDS = {
     sam: id('a5e40000', 4),
     leo: id('a5e40000', 5),
     dana: id('a5e40000', 6),
+    alex: id('a5e40000', 7),
+    hana: id('a5e40000', 8),
   },
   bakery: {
     intent: id('b0000000', 1),
@@ -235,6 +237,32 @@ export const PERSONAS: PersonaFixture[] = [
     summary:
       'Merchant. Sees matching missions, submits offers, answers counteroffers and confirms, ships or reports stockouts.',
     memberships: [{ tenantId: IDS.tenants.beaconBasics, role: 'MERCHANT_ADMIN' }],
+  },
+  {
+    key: 'alex',
+    userId: IDS.users.alex,
+    email: 'alex@cleanstart.example',
+    displayName: 'Alex Kim',
+    title: 'Fulfillment lead',
+    tenantName: 'CleanStart Supply',
+    tenantKind: 'MERCHANT',
+    roles: ['MERCHANT_ADMIN'],
+    summary:
+      'Merchant. Confirms stock (which triggers the PayPal capture), ships, or reports a stockout that starts AI recovery.',
+    memberships: [{ tenantId: IDS.tenants.cleanStart, role: 'MERCHANT_ADMIN' }],
+  },
+  {
+    key: 'hana',
+    userId: IDS.users.hana,
+    email: 'hana@harborgoods.example',
+    displayName: 'Hana Ito',
+    title: 'Store manager',
+    tenantName: 'Harbor Goods Co.',
+    tenantKind: 'MERCHANT',
+    roles: ['MERCHANT_ADMIN'],
+    summary:
+      'Merchant. Picks up replacement orders when the Recovery agent re-plans around a stockout.',
+    memberships: [{ tenantId: IDS.tenants.harborGoods, role: 'MERCHANT_ADMIN' }],
   },
 ];
 
