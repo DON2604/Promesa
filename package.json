@@ -30,7 +30,10 @@
     "smoke": "node scripts/smoke.mjs",
     "e2e": "node scripts/e2e.mjs",
     "smoke:needmesh": "node scripts/smoke-needmesh.mjs",
-    "smoke:marketplace": "node scripts/smoke-marketplace.mjs"
+    "smoke:marketplace": "node scripts/smoke-marketplace.mjs",
+    "video:record": "node scripts/video/record-demo.mjs",
+    "video:build": "node scripts/video/build-demo.mjs",
+    "media:gallery": "node scripts/video/gallery.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
