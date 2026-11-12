@@ -1,6 +1,10 @@
 import type { NextConfig } from 'next';
 
-const apiOrigin = new URL(process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000').origin;
+const configuredApi = process.env.NEXT_PUBLIC_API_BASE_URL;
+const apiOrigin =
+  !configuredApi || configuredApi === 'same-origin' || configuredApi === ''
+    ? ''
+    : new URL(configuredApi).origin;
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Phase 1 CSP. 'unsafe-inline' scripts are required by the theme bootstrap and Next's inline
@@ -12,7 +16,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self'",
-  `connect-src 'self' ${apiOrigin}${isDev ? ' ws: http://localhost:*' : ''}`,
+  `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ''}${isDev ? ' ws: http://localhost:*' : ''}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

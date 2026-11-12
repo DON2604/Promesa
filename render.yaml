@@ -1,0 +1,92 @@
+# Render Blueprint for NeedMesh.
+# The browser talks only to promesa-web. That service proxies /v1 to promesa-api, because
+# separate *.onrender.com hosts cannot share a session cookie.
+#
+# Apply: https://dashboard.render.com/blueprint/new?repo=https://github.com/DON2604/Promesa
+# Free compute sleeps when idle. The first request after a sleep takes a minute to wake.
+
+databases:
+  - name: promesa-db
+    plan: free
+    region: singapore
+    postgresMajorVersion: '16'
+    ipAllowList: []
+
+services:
+  - type: web
+    name: promesa-api
+    runtime: node
+    region: singapore
+    plan: free
+    healthCheckPath: /health/live
+    buildCommand: npm install --include=dev --ignore-scripts && npm rebuild esbuild && npm run build:contracts && npm run build -w @promesa/backend
+    startCommand: node scripts/render-bootstrap.mjs && npm run start -w @promesa/backend
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: promesa-db
+          property: connectionString
+      - key: AUTH_SESSION_SECRET
+        generateValue: true
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: promesa-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: ALLOWED_ORIGINS
+        fromService:
+          type: web
+          name: promesa-web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: PAYPAL_ENVIRONMENT
+        value: sandbox
+      - key: ENABLE_LIVE_PAYPAL_WRITES
+        value: 'false'
+      - key: PAYPAL_MCP_ENABLED
+        value: 'false'
+      - key: LLM_PROVIDER
+        value: fixture
+      - key: DEMO_MODE
+        value: 'false'
+      - key: DEMO_AUTH_ENABLED
+        value: 'false'
+      - key: DEMO_ACCOUNT_PASSWORD
+        value: needmesh-sandbox
+      - key: LOG_LEVEL
+        value: info
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CHANNEL3_API_KEY
+        sync: false
+
+  - type: web
+    name: promesa-web
+    runtime: node
+    region: singapore
+    plan: free
+    healthCheckPath: /
+    buildCommand: npm install --include=dev --ignore-scripts && npm run build:contracts && npm run build -w @promesa/frontend
+    startCommand: npm run start -w @promesa/frontend
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      # Browser calls this site. The /v1 route handler forwards to the API.
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: same-origin
+      - key: API_PROXY_URL
+        fromService:
+          type: web
+          name: promesa-api
+          envVarKey: RENDER_EXTERNAL_URL

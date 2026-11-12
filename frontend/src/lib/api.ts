@@ -1,8 +1,16 @@
 import type { ApiErrorBody } from '@promesa/contracts';
 
-export const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000'
-).replace(/\/$/, '');
+/**
+ * Absolute API origin, or '' when the browser should call this same site (the Next server
+ * proxies /v1). An empty or `same-origin` value is how the Render deploy stays first-party.
+ */
+const configured = process.env.NEXT_PUBLIC_API_BASE_URL;
+export const API_BASE_URL =
+  configured === undefined
+    ? 'http://localhost:4000'
+    : configured === '' || configured === 'same-origin'
+      ? ''
+      : configured.replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(
